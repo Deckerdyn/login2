@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login</title>
+    <!-- Enlace al archivo CSS -->
+    <link rel="stylesheet" href="/static/css/style.css" />
+  </head>
+  <body>
+    <!-- Contenedor para centrar todo -->
+    <div class="login-container">
+      <h1>Iniciar Sesión</h1>
+      <form id="loginForm">
+        <input
+          type="text"
+          name="email"
+          id="email"
+          placeholder="Email"
+          required
+        />
+        <input
+          type="password"
+          name="password"
+          id="password"
+          placeholder="Password"
+          required
+        />
+        <button type="submit">Ingresar</button>
+      </form>
+
+      <p id="error-message" style="color: red"></p>
+    </div>
+
+    <script>
+      document
+        .getElementById("loginForm")
+        .addEventListener("submit", async function (e) {
+          e.preventDefault();
+
+          const email = document.getElementById("email").value;
+          const password = document.getElementById("password").value;
+          const errorMessage = document.getElementById("error-message");
+
+          try {
+            const response = await fetch("/login", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+              },
+              body: new URLSearchParams({ email, password }),
+            });
+            console.log("Respuesta del servidor:", response);
+            if (response.ok) {
+              const data = await response.json();
+              localStorage.setItem("access_token", data.access_token); // Guardar el token
+              window.location.href = "/dashboard"; // Redirigir al dashboard
+            } else {
+              const error = await response.json();
+              errorMessage.innerText =
+                error.detail || "Credenciales incorrectas";
+            }
+          } catch (err) {
+            console.error(err);
+            errorMessage.innerText = "Error al intentar iniciar sesión.";
+          }
+        });
+    </script>
+  </body>
+</html>

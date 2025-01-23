@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard</title>
+    <!-- Enlace al archivo CSS -->
+    <link rel="stylesheet" href="/static/css/style.css" />
+  </head>
+  <body>
+    <!-- Contenedor principal -->
+    <div class="dashboard-container">
+      <button id="protectedBtn">Acceder a recurso protegido</button>
+      <button id="logoutBtn">Cerrar sesión</button>
+      <button id="replaceTokenBtn">Reemplazar Token</button>
+    </div>
+
+    <script>
+      // Botón para reemplazar token
+      document
+        .getElementById("replaceTokenBtn")
+        .addEventListener("click", async function () {
+          const newToken = prompt("Introduce el nuevo token JWT:");
+
+          if (!newToken) {
+            alert("No se proporcionó un token.");
+            return;
+          }
+
+          try {
+            const response = await fetch("/replace-token", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ new_token: newToken }),
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+              localStorage.setItem("access_token", data.access_token); // Guardar el nuevo token
+              alert("Token reemplazado exitosamente.");
+            } else {
+              alert(`Error: ${data.detail}`);
+            }
+          } catch (err) {
+            console.error(err);
+            alert("Ocurrió un error al intentar reemplazar el token.");
+          }
+        });
+    </script>
+
+    <script>
+      // Cerrar sesión
+      document
+        .getElementById("logoutBtn")
+        .addEventListener("click", function () {
+          localStorage.removeItem("access_token");
+          window.location.href = "/"; // Redirigir al login
+        });
+
+      // Acceder a la ruta /protected
+      document
+        .getElementById("protectedBtn")
+        .addEventListener("click", async function () {
+          const token = localStorage.getItem("access_token");
+
+          if (!token) {
+            alert("No estás autenticado. Inicia sesión primero.");
+            return;
+          }
+
+          const url = new URL("http://127.0.0.1:8000/protected");
+          url.searchParams.set("token", token);
+
+          const response = await fetch(url, {
+            method: "GET",
+            headers: {
+              accept: "application/json",
+            },
+          });
+
+          if (response.ok) {
+            window.location.href = "/protegido";
+          } else {
+            const error = await response.json();
+            alert(`Error: ${error.detail}`);
+          }
+        });
+
+      // Mostrar el formulario para reemplazar el token
+      document
+        .getElementById("replaceTokenBtn")
+        .addEventListener("click", function () {
+          const container = document.getElementById("manualTokenContainer");
+          container.style.display =
+            container.style.display === "none" ? "block" : "none";
+        });
+
+      // Guardar el token ingresado manualmente
+      document
+        .getElementById("submitTokenBtn")
+        .addEventListener("click", function () {
+          const manualToken = document.getElementById("manualTokenInput").value;
+
+          if (!manualToken) {
+            alert("Por favor, ingrese un token válido.");
+            return;
+          }
+
+          // Opcional: Llamar a un endpoint para validar el token antes de guardarlo
+          localStorage.setItem("access_token", manualToken);
+          alert("Token reemplazado con éxito.");
+          document.getElementById("manualTokenInput").value = ""; // Limpiar el campo de entrada
+          document.getElementById("manualTokenContainer").style.display =
+            "none";
+        });
+    </script>
+  </body>
+</html>

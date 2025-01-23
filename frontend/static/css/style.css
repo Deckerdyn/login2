@@ -1,0 +1,53 @@
+/* Centrar el contenido en la página */
+body {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  margin: 0;
+  background-color: #f4f4f9;
+  font-family: Arial, sans-serif;
+}
+
+/* Estilo del contenedor de login */
+.login-container {
+  text-align: center;
+  padding: 20px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background-color: white;
+  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 400px; /* Limitar el ancho máximo */
+  box-sizing: border-box; /* Asegura que el padding no aumente el tamaño total */
+}
+
+/* Asegurar que el padding no afecte el tamaño total */
+input,
+button {
+  width: 100%; /* Fuerza que tengan el mismo ancho */
+  padding: 12px 15px; /* Ajusta el padding interno */
+  margin: 10px 0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box; /* Asegura que el padding no aumente el tamaño total */
+}
+
+/* Estilo del botón */
+button {
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+/* Estilo cuando el botón es hover (cuando el ratón está encima) */
+button:hover {
+  background-color: #45a049;
+}
+
+/* Estilo del mensaje de error */
+#error-message {
+  color: red;
+  font-size: 14px;
+}
