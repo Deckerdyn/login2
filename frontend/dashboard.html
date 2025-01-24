@@ -15,7 +15,16 @@
       <button id="replaceTokenBtn">Reemplazar Token</button>
     </div>
 
+    <!-- Scripts -->
     <script>
+      // Verificar si el usuario tiene un token
+      window.onload = function () {
+        const token = localStorage.getItem("access_token");
+        if (!token) {
+          window.location.href = "/"; // Redirigir al login si no hay token
+        }
+      };
+
       // Botón para reemplazar token
       document
         .getElementById("replaceTokenBtn")
@@ -48,9 +57,7 @@
             alert("Ocurrió un error al intentar reemplazar el token.");
           }
         });
-    </script>
 
-    <script>
       // Cerrar sesión
       document
         .getElementById("logoutBtn")
@@ -86,34 +93,6 @@
             const error = await response.json();
             alert(`Error: ${error.detail}`);
           }
-        });
-
-      // Mostrar el formulario para reemplazar el token
-      document
-        .getElementById("replaceTokenBtn")
-        .addEventListener("click", function () {
-          const container = document.getElementById("manualTokenContainer");
-          container.style.display =
-            container.style.display === "none" ? "block" : "none";
-        });
-
-      // Guardar el token ingresado manualmente
-      document
-        .getElementById("submitTokenBtn")
-        .addEventListener("click", function () {
-          const manualToken = document.getElementById("manualTokenInput").value;
-
-          if (!manualToken) {
-            alert("Por favor, ingrese un token válido.");
-            return;
-          }
-
-          // Opcional: Llamar a un endpoint para validar el token antes de guardarlo
-          localStorage.setItem("access_token", manualToken);
-          alert("Token reemplazado con éxito.");
-          document.getElementById("manualTokenInput").value = ""; // Limpiar el campo de entrada
-          document.getElementById("manualTokenContainer").style.display =
-            "none";
         });
     </script>
   </body>

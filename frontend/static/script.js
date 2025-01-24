@@ -15,7 +15,11 @@ document
     });
 
     if (response.ok) {
-      // Si la respuesta es un redireccionamiento, navega a la página de dashboard
+      // Si la respuesta es exitosa, guarda el token
+      const data = await response.json();
+      //localStorage.setItem("access_token", data.access_token); // Guardar el token
+
+      // Redirige al dashboard
       window.location.href = "/dashboard";
     } else {
       // Si hay un error en la autenticación, muestra el error
