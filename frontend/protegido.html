@@ -9,12 +9,54 @@
   <body>
     <!-- Contenedor principal centrado -->
     <div class="protected-container">
-      <h1>Este es un archivo protegido</h1>
+      <h1>Información de Clima</h1>
       <p>Solo puedes acceder a esta página si tienes un token válido.</p>
+
+      <div id="weather-info">
+        <!-- Aquí se mostrará la información de clima -->
+        <p id="temperature"></p>
+        <p id="description"></p>
+        <p id="location"></p>
+      </div>
+
       <button id="backBtn">Volver al Dashboard</button>
     </div>
 
     <script>
+      // Obtener la información del clima de la API de Open-Meteo
+      async function getWeatherData() {
+        try {
+          const response = await fetch(
+            "https://api.open-meteo.com/v1/forecast?latitude=40.7128&longitude=-74.0060&current_weather=true"
+          );
+          const data = await response.json();
+
+          if (data && data.current_weather) {
+            const weather = data.current_weather;
+            document.getElementById(
+              "temperature"
+            ).textContent = `Temperatura: ${weather.temperature}°C`;
+            document.getElementById(
+              "description"
+            ).textContent = `Condiciones: ${weather.weathercode}`;
+            document.getElementById(
+              "location"
+            ).textContent = `Ubicación: New York (lat: 40.7128, lon: -74.0060)`;
+          } else {
+            document.getElementById("weather-info").textContent =
+              "No se pudo obtener información del clima.";
+          }
+        } catch (error) {
+          console.error("Error al obtener los datos del clima:", error);
+          document.getElementById("weather-info").textContent =
+            "Error al obtener los datos del clima.";
+        }
+      }
+
+      // Llamar a la función para obtener los datos del clima
+      getWeatherData();
+
+      // Función para volver al Dashboard
       document.getElementById("backBtn").addEventListener("click", function () {
         window.location.href = "/dashboard"; // Redirigir al dashboard
       });
