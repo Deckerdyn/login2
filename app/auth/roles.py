@@ -1,7 +1,7 @@
 roles = {
     "admin": {
         "max_queries": None, #consultas ilimitadas 
-        "token_duration": None , #un día de duración 
+        "token_duration": 24 * 60 , #un día de duración 
         "access_schedule": None,
     },
     "usuario": {

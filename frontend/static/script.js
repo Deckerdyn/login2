@@ -12,17 +12,14 @@ document
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ email, password }),
+      credentials: "include", // 🔹 IMPORTANTE: Permite que el navegador maneje la cookie de sesión
     });
 
     if (response.ok) {
-      // Si la respuesta es exitosa, guarda el token
-      const data = await response.json();
-      //localStorage.setItem("access_token", data.access_token); // Guardar el token
-
-      // Redirige al dashboard
-      window.location.href = "/dashboard";
+      // 🔹 Ya no guardamos el token manualmente, la cookie lo maneja automáticamente
+      window.location.href = "/dashboard"; // Redirige al dashboard
     } else {
-      // Si hay un error en la autenticación, muestra el error
+      // 🔹 Manejo de errores si la autenticación falla
       const data = await response.json();
       alert(data.detail || "Error desconocido");
     }

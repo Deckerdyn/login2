@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException, status, Request
-from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
+from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordBearer
 from app.database.db import db  # Corregido
@@ -60,16 +60,37 @@ def track_user_queries(user_email: str, max_queries: int):
 
 
 
+@app.post("/replace-token/{new_token}")
+async def replace_token(new_token: str, request: Request, response: Response):
+    # Obtener el token actual de la cookie HttpOnly
+    current_token = request.cookies.get("access_token")
+    
+    if not current_token:
+        raise HTTPException(status_code=400, detail="No token found in cookies.")
+    
+    # Verificar el token actual
+    try:
+        decoded_token = verify_token(current_token)  # Asumiendo que esta función decodifica y valida el token
+    except Exception as e:
+        raise HTTPException(status_code=401, detail="Invalid token.")
 
-@app.post("/replace-token")
-async def replace_token(request: Request):
-    body = await request.json()  # Leer el cuerpo como JSON
-    new_token = body.get("new_token")
+    # Verificar el nuevo token (si es necesario)
+    try:
+        decoded_new_token = verify_token(new_token)  # Opcional, puedes validar el nuevo token si es necesario
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Invalid new token.")
     
-    if not new_token:
-        raise HTTPException(status_code=400, detail="No se proporcionó un token.")
-    
-    return JSONResponse(content={"access_token": new_token})
+    # Establecer el nuevo token en la cookie HttpOnly
+    response.set_cookie(
+        key="access_token",
+        value=new_token,
+        httponly=True,
+        max_age=timedelta(hours=24),  # Ajusta la duración según sea necesario
+        secure=False  # Cambiar a True en producción si usas HTTPS
+    )
+
+    return {"access_token": new_token, "message": "Token replaced successfully"}
+
 
 
 
@@ -94,12 +115,7 @@ def protected_resource(token: str = Depends(oauth2_scheme)):
     if not role or not email:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     
-    # Obtener el límite de consultas para el rol del usuario
-    max_queries = roles.get(role, {}).get("max_queries")
-    print(f"Max queries for role {role}: {max_queries}")  # Depuración
     
-    # Rastrear las consultas
-    track_user_queries(email, max_queries)
     
     return {"message": f"Access granted to {email}"}
 
@@ -196,7 +212,7 @@ def register_user(user: UserCreate):
 
 
 @app.post("/login")
-async def login(request: Request, email: str = Form(...), password: str = Form(...)):
+async def login(request: Request, email: str = Form(...), password: str = Form(...), response: Response = None):
     user = users_collection.find_one({"email": email})
     if not user:
         raise HTTPException(status_code=400, detail="Invalid credentials")
@@ -206,24 +222,23 @@ async def login(request: Request, email: str = Form(...), password: str = Form(.
     
     role = user.get("role", "temporary_user")  # Predeterminado a "temporary_user" si no tiene rol
 
-    # Verificar si ya existe un token en los headers (Authorization: Bearer <token>)
-    token = request.headers.get("Authorization")
-    
-    if token:
-        token = token.split(" ")[1]  # Extraer el token del encabezado
-        try:
-            # Verificamos si el token es válido
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-            # Si el token es válido, lo devolvemos tal cual sin generar uno nuevo
-            return {"access_token": token, "token_type": "bearer"}
-        except jwt.ExpiredSignatureError:
-            raise HTTPException(status_code=401, detail="Token has expired")
-        except jwt.JWTError:
-            raise HTTPException(status_code=401, detail="Invalid token")
-    else:
-        # Si no hay token, generamos uno nuevo
-        access_token = create_access_token(data={"sub": user["email"], "role": role}, role=role)
-        return {"access_token": access_token, "token_type": "bearer", "message": "Nuevo token generado"}
+    # Eliminar el token antiguo de la cookie (si existe)
+    response.delete_cookie("access_token")
+
+    # Generar el nuevo token
+    access_token = create_access_token(data={"sub": user["email"], "role": role}, role=role)
+
+    # Establecer el nuevo token en la cookie como HTTPOnly
+    response.set_cookie(
+        key="access_token", 
+        value=access_token, 
+        httponly=True,  # Proteger la cookie
+        max_age=timedelta(hours=24),  # Ajusta la duración según sea necesario
+        secure=False  # Cambiar a True en producción si usas HTTPS
+    )
+
+    return {"access_token": access_token, "token_type": "bearer", "message": "Nuevo token generado"}
+
 
 
 
@@ -251,10 +266,20 @@ async def generate_token(email: str, role: str):
 
 
 @app.get("/protected")
-def protected_route(token: str = Depends(verify_token)):
-    if not token:
+async def protected_route(request: Request):
+    # Obtener el token desde las cookies HTTPOnly
+    token_from_cookie = request.cookies.get("access_token")
+
+    if not token_from_cookie:
+        raise HTTPException(status_code=401, detail="Token is missing")
+
+    # Verificar el token usando la función 'verify_token'
+    try:
+        token = verify_token(token_from_cookie)
+    except Exception as e:
         raise HTTPException(status_code=401, detail="Invalid token")
-    
+
+    # Obtener los datos del token
     email = token.get("sub")
     role = token.get("role")
     exp = token.get("exp")
@@ -263,7 +288,7 @@ def protected_route(token: str = Depends(verify_token)):
     if not email or not role or not exp:
         raise HTTPException(status_code=401, detail="Invalid token data")
 
-    # Obtener datos del rol
+    # Obtener los datos del rol
     role_data = roles.get(role)
     if not role_data:
         raise HTTPException(status_code=403, detail="Role not found")
@@ -271,9 +296,6 @@ def protected_route(token: str = Depends(verify_token)):
     max_queries = role_data.get("max_queries")
     token_duration = role_data.get("token_duration")
     access_schedule = role_data.get("access_schedule")
-
-    #if max_queries is None:
-    #    raise HTTPException(status_code=403, detail="Query limit not defined for this role")
 
     # Hora actual en la zona horaria de Chile
     now_chile = datetime.now(chile_tz)
@@ -298,14 +320,22 @@ def protected_route(token: str = Depends(verify_token)):
         current_hour = now_chile.hour
         if not (access_schedule["start"] <= current_hour < access_schedule["end"]):
             raise HTTPException(status_code=403, detail="Access not allowed outside of scheduled hours")
-
-    # Rastrear las consultas del usuario
+    # Obtener el límite de consultas para el rol del usuario
+    max_queries = roles.get(role, {}).get("max_queries")
+    print(f"Max queries for role {role}: {max_queries}")  # Depuración
+    
+    # Rastrear las consultas
     track_user_queries(email, max_queries)
+    # Rastrear las consultas del usuario
+
 
     return {"message": f"Access granted to {email}", "role": role}
 
-
-
+@app.post("/logout")
+async def logout(response: Response):
+    # Eliminar la cookie del token HTTPOnly
+    response.delete_cookie("access_token")
+    return {"message": "Logged out successfully"}
 
 
 

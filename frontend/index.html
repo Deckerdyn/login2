@@ -49,12 +49,13 @@
                 "Content-Type": "application/x-www-form-urlencoded",
               },
               body: new URLSearchParams({ email, password }),
+              credentials: "include", // ⬅️ Esto asegura que se envíen y reciban cookies
             });
+
             console.log("Respuesta del servidor:", response);
+
             if (response.ok) {
-              const data = await response.json();
-              localStorage.setItem("access_token", data.access_token); // Guardar el token
-              window.location.href = "/dashboard"; // Redirigir al dashboard
+              window.location.href = "/dashboard"; // Redirigir tras login exitoso
             } else {
               const error = await response.json();
               errorMessage.innerText =

@@ -15,76 +15,39 @@
       <button id="replaceTokenBtn">Reemplazar Token</button>
     </div>
 
-    <!-- Scripts -->
     <script>
-      // Verificar si el usuario tiene un token
+      // Modificación en el login para evitar que haga la solicitud automáticamente
       window.onload = function () {
-        const token = localStorage.getItem("access_token");
+        // Solo redirige al login si no hay token en la cookie
+        const token = getCookie("access_token");
         if (!token) {
-          window.location.href = "/"; // Redirigir al login si no hay token
+          window.location.href = "/"; // Redirigir al login si no está autenticado
         }
       };
-
-      // Botón para reemplazar token
-      document
-        .getElementById("replaceTokenBtn")
-        .addEventListener("click", async function () {
-          const newToken = prompt("Introduce el nuevo token JWT:");
-
-          if (!newToken) {
-            alert("No se proporcionó un token.");
-            return;
-          }
-
-          try {
-            const response = await fetch("/replace-token", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ new_token: newToken }),
-            });
-
-            const data = await response.json();
-            if (response.ok) {
-              localStorage.setItem("access_token", data.access_token); // Guardar el nuevo token
-              alert("Token reemplazado exitosamente.");
-            } else {
-              alert(`Error: ${data.detail}`);
-            }
-          } catch (err) {
-            console.error(err);
-            alert("Ocurrió un error al intentar reemplazar el token.");
-          }
-        });
 
       // Cerrar sesión
       document
         .getElementById("logoutBtn")
-        .addEventListener("click", function () {
-          localStorage.removeItem("access_token");
-          window.location.href = "/"; // Redirigir al login
+        .addEventListener("click", async function () {
+          try {
+            await fetch("/logout", {
+              method: "POST",
+              credentials: "include", // Enviar la cookie para que el backend la elimine
+            });
+
+            window.location.href = "/"; // Redirigir al login
+          } catch (err) {
+            console.error("Error al cerrar sesión:", err);
+          }
         });
 
       // Acceder a la ruta /protected
       document
         .getElementById("protectedBtn")
         .addEventListener("click", async function () {
-          const token = localStorage.getItem("access_token");
-
-          if (!token) {
-            alert("No estás autenticado. Inicia sesión primero.");
-            return;
-          }
-
-          const url = new URL("http://127.0.0.1:8000/protected");
-          url.searchParams.set("token", token);
-
-          const response = await fetch(url, {
+          const response = await fetch("/protected", {
             method: "GET",
-            headers: {
-              accept: "application/json",
-            },
+            credentials: "include", // 🔹 IMPORTANTE: Enviar la cookie automáticamente
           });
 
           if (response.ok) {
