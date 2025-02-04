@@ -52,7 +52,7 @@ def generate_csrf_token():
 async def get_csrf_token(request: Request):
     # Verificar si el usuario está autenticado
     if not request.cookies.get("access_token"):  # Verificar que el usuario esté autenticado
-        raise HTTPException(status_code=401, detail="Not authenticated")
+        raise HTTPException(status_code=401, detail="No autenticado")
 
     # Si ya hay un CSRF Token en las cookies, no lo generes nuevamente
     csrf_token = request.cookies.get("csrf_token")
@@ -83,7 +83,7 @@ def track_user_queries(user_email: str, max_queries: int):
         print(f"Current query count for today: {current_count}")  # Debugging print
 
         if current_count >= max_queries:
-            raise HTTPException(status_code=403, detail="Query limit exceeded")
+            raise HTTPException(status_code=403, detail="Limite de consultas excedido")
 
         # Incrementar el conteo de consultas para hoy
         query_logs[now] = current_count + 1
@@ -100,19 +100,19 @@ async def replace_token(new_token: str, request: Request, response: Response):
     current_token = request.cookies.get("access_token")
     
     if not current_token:
-        raise HTTPException(status_code=400, detail="No token found in cookies.")
+        raise HTTPException(status_code=400, detail="No se encontró ningún token en las cookies.")
     
     # Verificar el token actual
     try:
         decoded_token = verify_token(current_token)  # Asumiendo que esta función decodifica y valida el token
     except Exception as e:
-        raise HTTPException(status_code=401, detail="Invalid token.")
+        raise HTTPException(status_code=401, detail="Token no válido")
 
     # Verificar el nuevo token (si es necesario)
     try:
         decoded_new_token = verify_token(new_token)  # Opcional, puedes validar el nuevo token si es necesario
     except Exception as e:
-        raise HTTPException(status_code=400, detail="Invalid new token.")
+        raise HTTPException(status_code=400, detail="Nuevo token no válido.")
     
     # Establecer el nuevo token en la cookie HttpOnly
     response.set_cookie(
@@ -123,7 +123,7 @@ async def replace_token(new_token: str, request: Request, response: Response):
         secure=False  # Cambiar a True en producción si usas HTTPS
     )
 
-    return {"access_token": new_token, "message": "Token replaced successfully"}
+    return {"access_token": new_token, "message": "Token reemplazado exitosamente"}
 
 
 
@@ -137,9 +137,9 @@ def protected_resource(token: str = Depends(oauth2_scheme)):
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         print(f"Decoded payload: {payload}")  # Depuración
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired")
+        raise HTTPException(status_code=401, detail="El token ha caducado")
     except jwt.JWTError as e:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="Token no válido")
     
     role = payload.get("role")
     email = payload.get("sub")
@@ -147,11 +147,11 @@ def protected_resource(token: str = Depends(oauth2_scheme)):
     print(f"Role: {role}, Email: {email}")  # Depuración
 
     if not role or not email:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token no válido")
     
     
     
-    return {"message": f"Access granted to {email}"}
+    return {"message": f"Acceso concedido a {email}"}
 
 
 @app.get("/protegido", response_class=HTMLResponse)
@@ -171,7 +171,7 @@ async def get_index():
 def role_required(required_role: str):
     def role_checker(token: dict = Depends(verify_token)):
         if token["role"] != required_role:
-            raise HTTPException(status_code=403, detail="Insufficient permissions")
+            raise HTTPException(status_code=403, detail="Permisos insuficientes")
         return token
     return role_checker
 
@@ -220,7 +220,7 @@ def register_user(user: UserCreate):
     # Verificar si el email ya está registrado
     existing_user = db.users.find_one({"email": user.email})
     if existing_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail="Correo electrónico ya registrado")
     
     # Hash de la contraseña
     hashed_password = hash_password(user.password)
@@ -250,10 +250,10 @@ def register_user(user: UserCreate):
 async def login(request: Request, email: str = Form(...), password: str = Form(...), response: Response = None):
     user = users_collection.find_one({"email": email})
     if not user:
-        raise HTTPException(status_code=400, detail="Invalid credentials")
+        raise HTTPException(status_code=400, detail="Credenciales no válidas")
 
     if not verify_password(password, user["password"]):
-        raise HTTPException(status_code=400, detail="Invalid credentials")
+        raise HTTPException(status_code=400, detail="Credenciales no válidas")
 
     role = user.get("role", "temporary_user")
 
@@ -279,7 +279,7 @@ async def login(request: Request, email: str = Form(...), password: str = Form(.
         secure=False  # Cambiar a True en producción
     )
 
-    return {"csrf_token": csrf_token, "message": "Login successful"}
+    return {"csrf_token": csrf_token, "message": "Inicio de sesión exitoso"}
 
 
 # 🔹 Middleware para validar el CSRF Token en cada solicitud POST, PUT, DELETE
@@ -292,7 +292,7 @@ async def verify_csrf_token(request: Request, csrf_token: str = Header(None)):
 # 🔹 Proteger las rutas que modifican datos
 @app.post("/protected-action", dependencies=[Depends(verify_csrf_token)])
 async def protected_action():
-    return {"message": "CSRF Token validated successfully"}
+    return {"message": "Token CSRF validado exitosamente"}
 
 
 
@@ -327,29 +327,29 @@ async def protected_route(request: Request):
     csrf_token_from_cookie = request.cookies.get("csrf_token")
 
     if not csrf_token_from_cookie:
-        raise HTTPException(status_code=401, detail="CSRF token is missing")
+        raise HTTPException(status_code=401, detail="Falta el token CSRF")
 
     # Obtener el CSRF token enviado en la cabecera
     csrf_token_from_header = request.headers.get("X-CSRF-Token")
 
     if not csrf_token_from_header:
-        raise HTTPException(status_code=401, detail="CSRF token is missing in the request")
+        raise HTTPException(status_code=401, detail="Falta el token CSRF en la solicitud")
 
     # Comparar ambos tokens (del cookie y del header)
     if csrf_token_from_cookie != csrf_token_from_header:
-        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+        raise HTTPException(status_code=403, detail="Token CSRF no válido")
 
     # Obtener los datos del usuario del token de la cookie de sesión (no es necesario verificar el JWT aquí)
     token_from_cookie = request.cookies.get("access_token")
 
     if not token_from_cookie:
-        raise HTTPException(status_code=401, detail="Access token is missing")
+        raise HTTPException(status_code=401, detail="Falta el token de acceso")
 
     # Verificar el token usando la función 'verify_token'
     try:
         token = verify_token(token_from_cookie)
     except Exception as e:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="Token no válido")
 
     # Obtener los datos del token
     email = token.get("sub")
@@ -358,12 +358,12 @@ async def protected_route(request: Request):
     iat = token.get("iat")
 
     if not email or not role or not exp:
-        raise HTTPException(status_code=401, detail="Invalid token data")
+        raise HTTPException(status_code=401, detail="Datos de token no válidos")
 
     # Obtener los datos del rol
     role_data = roles.get(role)
     if not role_data:
-        raise HTTPException(status_code=403, detail="Role not found")
+        raise HTTPException(status_code=403, detail="Rol no encontrado")
 
     max_queries = role_data.get("max_queries")
     token_duration = role_data.get("token_duration")
@@ -391,7 +391,7 @@ async def protected_route(request: Request):
     if access_schedule:
         current_hour = now_chile.hour
         if not (access_schedule["start"] <= current_hour < access_schedule["end"]):
-            raise HTTPException(status_code=403, detail="Access not allowed outside of scheduled hours")
+            raise HTTPException(status_code=403, detail="Acceso no permitido fuera del horario previsto")
 
     # Obtener el límite de consultas para el rol del usuario
     print(f"Max queries for role {role}: {max_queries}")  # Depuración
@@ -408,7 +408,7 @@ async def logout(response: Response):
     response.delete_cookie("access_token", path="/")
     response.delete_cookie("csrf_token", path="/")
     
-    return {"message": "Logged out successfully"}
+    return {"message": "Cerró sesión exitosamente"}
 
 
 
@@ -416,7 +416,7 @@ async def logout(response: Response):
 def update_user(user_id: str, user: UserCreate):
     db_user = db.users.find_one({"_id": ObjectId(user_id)})
     if not db_user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
     
     updated_data = {}
     if user.email:
@@ -432,7 +432,7 @@ def update_user(user_id: str, user: UserCreate):
 def delete_user(user_id: str):
     user = db.users.find_one({"_id": ObjectId(user_id)})
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
     
     db.users.delete_one({"_id": ObjectId(user_id)})
     return {"id": user_id, "email": user["email"]}
