@@ -6,10 +6,25 @@ document
     const email = document.getElementById("email").value;
     const password = document.getElementById("password").value;
 
+    // Obtener CSRF Token de la cookie
+    function getCookie(name) {
+      const cookies = document.cookie.split("; ");
+      for (const cookie of cookies) {
+        const [key, value] = cookie.split("=");
+        if (key === name) {
+          return value;
+        }
+      }
+      return null;
+    }
+
+    const csrfToken = getCookie("csrf_token");
+
     const response = await fetch("/login", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "X-CSRF-Token": csrfToken, // 🔹 Enviamos el CSRF Token en el header
       },
       body: JSON.stringify({ email, password }),
       credentials: "include", // 🔹 IMPORTANTE: Permite que el navegador maneje la cookie de sesión

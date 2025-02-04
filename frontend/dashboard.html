@@ -4,11 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dashboard</title>
-    <!-- Enlace al archivo CSS -->
     <link rel="stylesheet" href="/static/css/style.css" />
   </head>
   <body>
-    <!-- Contenedor principal -->
     <div class="dashboard-container">
       <button id="protectedBtn">Acceder a recurso protegido</button>
       <button id="logoutBtn">Cerrar sesión</button>
@@ -16,24 +14,40 @@
     </div>
 
     <script>
-      // Modificación en el login para evitar que haga la solicitud automáticamente
+      // Verificación del CSRF Token al cargar la página
       window.onload = function () {
-        // Solo redirige al login si no hay token en la cookie
-        const token = getCookie("access_token");
-        if (!token) {
-          window.location.href = "/"; // Redirigir al login si no está autenticado
+        const csrfToken = getCookie("csrf_token");
+        if (!csrfToken) {
+          window.location.href = "/"; // Redirigir al login si no se encuentra el CSRF Token
         }
       };
+
+      // Función para obtener el valor de la cookie por su nombre
+      function getCookie(name) {
+        const value = "; " + document.cookie;
+        const parts = value.split("; " + name + "=");
+        if (parts.length === 2) return parts.pop().split(";").shift();
+      }
 
       // Cerrar sesión
       document
         .getElementById("logoutBtn")
         .addEventListener("click", async function () {
           try {
+            // Llamar al endpoint de logout
             await fetch("/logout", {
               method: "POST",
-              credentials: "include", // Enviar la cookie para que el backend la elimine
+              headers: {
+                "X-CSRF-Token": getCookie("csrf_token"), // Enviar CSRF Token al hacer logout
+              },
+              credentials: "include",
             });
+
+            // Borrar las cookies de sesión y CSRF
+            document.cookie =
+              "access_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+            document.cookie =
+              "csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
 
             window.location.href = "/"; // Redirigir al login
           } catch (err) {
@@ -45,16 +59,53 @@
       document
         .getElementById("protectedBtn")
         .addEventListener("click", async function () {
+          const csrfToken = getCookie("csrf_token");
+
+          if (!csrfToken) {
+            alert("No se ha encontrado un CSRF Token válido.");
+            return;
+          }
+
           const response = await fetch("/protected", {
             method: "GET",
-            credentials: "include", // 🔹 IMPORTANTE: Enviar la cookie automáticamente
+            headers: {
+              "X-CSRF-Token": csrfToken, // Enviar CSRF Token para acceder a recursos protegidos
+            },
+            credentials: "include", // Permite el envío de cookies automáticamente
           });
 
           if (response.ok) {
-            window.location.href = "/protegido";
+            window.location.href = "/protegido"; // Redirige si la solicitud es exitosa
           } else {
             const error = await response.json();
             alert(`Error: ${error.detail}`);
+          }
+        });
+
+      // Reemplazar el CSRF Token (si es necesario)
+      document
+        .getElementById("replaceTokenBtn")
+        .addEventListener("click", async function () {
+          const csrfToken = getCookie("csrf_token");
+
+          if (!csrfToken) {
+            alert("No se ha encontrado un CSRF Token válido.");
+            return;
+          }
+
+          const response = await fetch("/replace-token", {
+            method: "POST",
+            headers: {
+              "X-CSRF-Token": csrfToken, // Enviar el CSRF Token actual
+            },
+            credentials: "include",
+          });
+
+          if (response.ok) {
+            alert("Token CSRF reemplazado correctamente.");
+          } else {
+            const error = await response.json();
+            alert(`Error al reemplazar el token: ${error.detail}`);
           }
         });
     </script>

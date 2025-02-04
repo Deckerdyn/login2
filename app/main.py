@@ -1,21 +1,22 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Request
-from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse, Response
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Header, Form
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordBearer
-from app.database.db import db  # Corregido
-from app.models.user import UserCreate, UserResponse, Token, LoginRequest  # Corregido
-from app.auth.hash import hash_password, verify_password  # Corregido
-from app.auth.jwt import create_access_token, verify_token  # Corregido
-from fastapi import Form
+from app.database.db import db  
+from app.models.user import UserCreate, UserResponse  
+from app.auth.hash import hash_password, verify_password  
+from app.auth.jwt import create_access_token, verify_token  
 import os
 from bson import ObjectId
 from app.database.db import users_collection  
 from datetime import datetime, timedelta, timezone
 import jwt
-from app.auth.jwt import SECRET_KEY, ALGORITHM  # Ajusta la ruta si es necesario
+from app.auth.jwt import SECRET_KEY, ALGORITHM  
 from app.auth.roles import roles  
-
 import pytz
+from decouple import config
+import secrets 
+from fastapi.middleware.cors import CORSMiddleware
 
 # Zona horaria de Chile
 chile_tz = pytz.timezone("America/Santiago")
@@ -29,7 +30,40 @@ app.mount("/static", StaticFiles(directory=os.path.join(os.getcwd(), "frontend/s
 # Simula un almacenamiento en memoria para las consultas realizadas
 query_logs = {}
 
-from app.auth.roles import roles
+# Middleware CORS (necesario para permitir frontend en otro dominio si aplica)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8000"],  # Cambia esto según tu frontend
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+# Diccionario en memoria para registrar intentos fallidos
+failed_login_attempts = {}
+
+MAX_ATTEMPTS = 3  # Máximo de intentos antes de bloquear
+BLOCK_TIME = timedelta(minutes=1)  # Tiempo de bloqueo
+
+# 🔹 Generar un token CSRF seguro
+def generate_csrf_token():
+    return secrets.token_urlsafe(32)
+
+@app.get("/csrf-token")
+async def get_csrf_token(request: Request):
+    # Verificar si el usuario está autenticado
+    if not request.cookies.get("access_token"):  # Verificar que el usuario esté autenticado
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    # Si ya hay un CSRF Token en las cookies, no lo generes nuevamente
+    csrf_token = request.cookies.get("csrf_token")
+    if not csrf_token:
+        csrf_token = secrets.token_hex(16)  # Genera un CSRF Token si no hay uno
+
+    response = JSONResponse({"csrf_token": csrf_token})
+    # Establecer el token en la cookie si no existe
+    response.set_cookie("csrf_token", csrf_token, httponly=True, secure=True, samesite="Strict")
+    return response
+
 
 def track_user_queries(user_email: str, max_queries: int):
     now = datetime.now(timezone.utc).date().isoformat()  # Formato ISO para la fecha
@@ -201,7 +235,7 @@ def register_user(user: UserCreate):
         "password": hashed_password,
         "role": user.role,
         "query_logs": {},  # Inicializar log de consultas
-        "active_token": None  # Campo para almacenar el token activoampo para almacenar el token activo
+        #"active_token": None  # Campo para almacenar el token activoampo para almacenar el token activo
     }
     
     # Insertar el usuario en la base de datos
@@ -211,6 +245,7 @@ def register_user(user: UserCreate):
 
 
 
+# 🔹 Agregar CSRF Token al iniciar sesión
 @app.post("/login")
 async def login(request: Request, email: str = Form(...), password: str = Form(...), response: Response = None):
     user = users_collection.find_one({"email": email})
@@ -219,25 +254,45 @@ async def login(request: Request, email: str = Form(...), password: str = Form(.
 
     if not verify_password(password, user["password"]):
         raise HTTPException(status_code=400, detail="Invalid credentials")
-    
-    role = user.get("role", "temporary_user")  # Predeterminado a "temporary_user" si no tiene rol
 
-    # Eliminar el token antiguo de la cookie (si existe)
-    response.delete_cookie("access_token")
+    role = user.get("role", "temporary_user")
 
-    # Generar el nuevo token
+    # 🔸 Generar el token de acceso
     access_token = create_access_token(data={"sub": user["email"], "role": role}, role=role)
 
-    # Establecer el nuevo token en la cookie como HTTPOnly
+    # 🔹 Generar el token CSRF y almacenarlo en una cookie segura
+    csrf_token = generate_csrf_token()
+    
     response.set_cookie(
-        key="access_token", 
-        value=access_token, 
-        httponly=True,  # Proteger la cookie
-        max_age=timedelta(hours=24),  # Ajusta la duración según sea necesario
-        secure=False  # Cambiar a True en producción si usas HTTPS
+        key="access_token",
+        value=access_token,
+        httponly=True,  
+        max_age=timedelta(hours=24),
+        secure=False  # Cambiar a True en producción
     )
 
-    return {"access_token": access_token, "token_type": "bearer", "message": "Nuevo token generado"}
+    response.set_cookie(
+        key="csrf_token",
+        value=csrf_token,
+        httponly=False,  # El frontend debe poder leerlo
+        samesite="Strict",
+        secure=False  # Cambiar a True en producción
+    )
+
+    return {"csrf_token": csrf_token, "message": "Login successful"}
+
+
+# 🔹 Middleware para validar el CSRF Token en cada solicitud POST, PUT, DELETE
+async def verify_csrf_token(request: Request, csrf_token: str = Header(None)):
+    stored_csrf_token = request.cookies.get("csrf_token")
+    
+    if not stored_csrf_token or stored_csrf_token != csrf_token:
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+
+# 🔹 Proteger las rutas que modifican datos
+@app.post("/protected-action", dependencies=[Depends(verify_csrf_token)])
+async def protected_action():
+    return {"message": "CSRF Token validated successfully"}
 
 
 
@@ -265,13 +320,30 @@ async def generate_token(email: str, role: str):
 
 
 
+
 @app.get("/protected")
 async def protected_route(request: Request):
-    # Obtener el token desde las cookies HTTPOnly
+    # Obtener el CSRF token desde las cookies HTTPOnly
+    csrf_token_from_cookie = request.cookies.get("csrf_token")
+
+    if not csrf_token_from_cookie:
+        raise HTTPException(status_code=401, detail="CSRF token is missing")
+
+    # Obtener el CSRF token enviado en la cabecera
+    csrf_token_from_header = request.headers.get("X-CSRF-Token")
+
+    if not csrf_token_from_header:
+        raise HTTPException(status_code=401, detail="CSRF token is missing in the request")
+
+    # Comparar ambos tokens (del cookie y del header)
+    if csrf_token_from_cookie != csrf_token_from_header:
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+
+    # Obtener los datos del usuario del token de la cookie de sesión (no es necesario verificar el JWT aquí)
     token_from_cookie = request.cookies.get("access_token")
 
     if not token_from_cookie:
-        raise HTTPException(status_code=401, detail="Token is missing")
+        raise HTTPException(status_code=401, detail="Access token is missing")
 
     # Verificar el token usando la función 'verify_token'
     try:
@@ -320,21 +392,22 @@ async def protected_route(request: Request):
         current_hour = now_chile.hour
         if not (access_schedule["start"] <= current_hour < access_schedule["end"]):
             raise HTTPException(status_code=403, detail="Access not allowed outside of scheduled hours")
+
     # Obtener el límite de consultas para el rol del usuario
-    max_queries = roles.get(role, {}).get("max_queries")
     print(f"Max queries for role {role}: {max_queries}")  # Depuración
     
     # Rastrear las consultas
     track_user_queries(email, max_queries)
-    # Rastrear las consultas del usuario
-
 
     return {"message": f"Access granted to {email}", "role": role}
+
 
 @app.post("/logout")
 async def logout(response: Response):
     # Eliminar la cookie del token HTTPOnly
-    response.delete_cookie("access_token")
+    response.delete_cookie("access_token", path="/")
+    response.delete_cookie("csrf_token", path="/")
+    
     return {"message": "Logged out successfully"}
 
 

@@ -4,11 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Login</title>
-    <!-- Enlace al archivo CSS -->
     <link rel="stylesheet" href="/static/css/style.css" />
   </head>
   <body>
-    <!-- Contenedor para centrar todo -->
     <div class="login-container">
       <h1>Iniciar Sesión</h1>
       <form id="loginForm">
@@ -26,6 +24,9 @@
           placeholder="Password"
           required
         />
+        <input type="hidden" name="csrf_token" id="csrf_token" />
+        <!-- Token CSRF (Se rellenará con el valor al iniciar sesión) -->
+
         <button type="submit">Ingresar</button>
       </form>
 
@@ -40,6 +41,7 @@
 
           const email = document.getElementById("email").value;
           const password = document.getElementById("password").value;
+          const csrfToken = document.getElementById("csrf_token").value;
           const errorMessage = document.getElementById("error-message");
 
           try {
@@ -47,15 +49,19 @@
               method: "POST",
               headers: {
                 "Content-Type": "application/x-www-form-urlencoded",
+                "X-CSRF-Token": csrfToken, // Enviar CSRF token
               },
               body: new URLSearchParams({ email, password }),
-              credentials: "include", // ⬅️ Esto asegura que se envíen y reciban cookies
+              credentials: "include", // Mantener cookies de sesión
             });
 
-            console.log("Respuesta del servidor:", response);
-
             if (response.ok) {
-              window.location.href = "/dashboard"; // Redirigir tras login exitoso
+              const data = await response.json();
+              // Guardar el Access Token en las cookies (espero que ya se esté manejando en el backend)
+              document.cookie = `access_token=${data.access_token}; path=/; secure; HttpOnly`;
+              // Guardar el CSRF token de la respuesta (si es necesario)
+              document.getElementById("csrf_token").value = data.csrf_token;
+              window.location.href = "/dashboard"; // Redirigir al dashboard
             } else {
               const error = await response.json();
               errorMessage.innerText =
@@ -66,6 +72,40 @@
             errorMessage.innerText = "Error al intentar iniciar sesión.";
           }
         });
+
+      // Obtener CSRF token automáticamente al cargar la página (si ya se ha autenticado)
+      document.addEventListener("DOMContentLoaded", async () => {
+        function getCookie(name) {
+          const cookies = document.cookie.split("; ");
+          for (const cookie of cookies) {
+            const [key, value] = cookie.split("=");
+            if (key === name) {
+              return value;
+            }
+          }
+          return null;
+        }
+
+        // Verificar si hay una cookie de sesión antes de solicitar el CSRF token
+        if (getCookie("session")) {
+          // Cambia "session" por el nombre real de tu cookie de sesión
+          try {
+            const response = await fetch("/csrf-token", {
+              method: "GET",
+              credentials: "include",
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              document.getElementById("csrf_token").value = data.csrf_token;
+            }
+          } catch (error) {
+            console.error("Error al obtener CSRF Token:", error);
+          }
+        } else {
+          //console.log("No hay sesión activa, no se solicitará CSRF token.");
+        }
+      });
     </script>
   </body>
 </html>

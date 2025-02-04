@@ -6,7 +6,7 @@ roles = {
     },
     "usuario": {
         "max_queries": 3,  # 3 consultas diarias
-        "token_duration": 12 * 60,  # 12 horas en minutos
+        "token_duration": 1,  # 12 horas en minutos
         "access_schedule": {"start": 9, "end": 19},  # Acceso entre las 9:00 y 18:00
     },
     "temporal": {
