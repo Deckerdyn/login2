@@ -61,7 +61,7 @@ async def get_csrf_token(request: Request):
 
     response = JSONResponse({"csrf_token": csrf_token})
     # Establecer el token en la cookie si no existe
-    response.set_cookie("csrf_token", csrf_token, httponly=True, secure=True, samesite="Strict")
+    response.set_cookie("csrf_token", csrf_token, httponly=True, secure=True, samesite="Strict", max_age=timedelta(hours=24))
     return response
 
 
@@ -378,7 +378,7 @@ async def protected_route(request: Request):
         issued_at = datetime.fromtimestamp(iat, timezone.utc).astimezone(chile_tz)
         token_lifetime = timedelta(minutes=token_duration)
         if now_chile > issued_at + token_lifetime:
-            raise HTTPException(status_code=401, detail="Token duration exceeded")
+            raise HTTPException(status_code=401, detail="Se superó la duración del token")
     else:
         print("Warning: 'iat' or 'token_duration' is missing in the token or role configuration")
 
