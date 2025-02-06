@@ -17,10 +17,34 @@ import pytz
 from decouple import config
 import secrets 
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware  # Importar correctamente
+from starlette.responses import Response
 
 # Zona horaria de Chile
 chile_tz = pytz.timezone("America/Santiago")
 app = FastAPI()
+
+
+# Definir el middleware CSP
+class CSPMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response: Response = await call_next(request)
+        # Aquí se configura la política CSP
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; "
+            "font-src 'self'; "
+            "connect-src 'self' https://api.open-meteo.com; "  # Permite las solicitudes a Open-Meteo
+            "object-src 'none'; "
+            "frame-src 'none'; "
+            "base-uri 'self';"
+        )
+        return response
+
+# Añadir el middleware a la aplicación FastAPI
+app.add_middleware(CSPMiddleware)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")  # Define la URL para obtener el token
 
@@ -423,7 +447,7 @@ def update_user(user_id: str, user: UserCreate):
         updated_data["email"] = user.email
     if user.password:
         updated_data["password"] = hash_password(user.password)
-
+    
     db.users.update_one({"_id": ObjectId(user_id)}, {"$set": updated_data})
     
     return {"id": user_id, "email": user.email}
