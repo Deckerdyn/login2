@@ -60,13 +60,13 @@ app.mount("/static", StaticFiles(directory=os.path.join(os.getcwd(), "frontend/s
 query_logs = {}
 
 # Middleware CORS (necesario para permitir frontend en otro dominio si aplica)
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["http://localhost:8000"],  
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Permitir todos los orígenes
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 # Diccionario en memoria para registrar intentos fallidos
 failed_login_attempts = {}
 
