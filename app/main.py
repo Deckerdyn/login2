@@ -29,14 +29,18 @@ app = FastAPI()
 class CSPMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         response: Response = await call_next(request)
-        # Aquí se configura la política CSP
+        
+        # Deshabilitar CSP solo para Swagger UI
+        if request.url.path.startswith("/docs") or request.url.path.startswith("/redoc"):
+            return response
+
         response.headers['Content-Security-Policy'] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline'; "
             "style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data:; "
             "font-src 'self'; "
-            "connect-src 'self' https://api.open-meteo.com; "  # Permite las solicitudes a Open-Meteo
+            "connect-src 'self' https://api.open-meteo.com; "
             "object-src 'none'; "
             "frame-src 'none'; "
             "base-uri 'self';"
@@ -45,6 +49,7 @@ class CSPMiddleware(BaseHTTPMiddleware):
 
 # Añadir el middleware a la aplicación FastAPI
 app.add_middleware(CSPMiddleware)
+
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")  # Define la URL para obtener el token
 
@@ -55,13 +60,13 @@ app.mount("/static", StaticFiles(directory=os.path.join(os.getcwd(), "frontend/s
 query_logs = {}
 
 # Middleware CORS (necesario para permitir frontend en otro dominio si aplica)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:8000"],  # Cambia esto según tu frontend
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=["http://localhost:8000"],  
+#     allow_credentials=True,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
 # Diccionario en memoria para registrar intentos fallidos
 failed_login_attempts = {}
 
@@ -99,7 +104,7 @@ def track_user_queries(user_email: str, max_queries: int):
     # Inicializar `query_logs` si está vacío
     query_logs = user.get("query_logs", {})
     
-    print(f"Tracking queries for {user_email}. Current query logs: {query_logs}")  # Debugging print
+    print(f"Consultas de seguimiento para {user_email}. Registros de consultas actuales: {query_logs}")  # Debugging print
     
     if max_queries is not None:
         # Obtener el conteo actual de consultas para hoy
@@ -118,36 +123,36 @@ def track_user_queries(user_email: str, max_queries: int):
 
 
 
-@app.post("/replace-token/{new_token}")
-async def replace_token(new_token: str, request: Request, response: Response):
-    # Obtener el token actual de la cookie HttpOnly
-    current_token = request.cookies.get("access_token")
+# @app.post("/replace-token/{new_token}")
+# async def replace_token(new_token: str, request: Request, response: Response):
+#     # Obtener el token actual de la cookie HttpOnly
+#     current_token = request.cookies.get("access_token")
     
-    if not current_token:
-        raise HTTPException(status_code=400, detail="No se encontró ningún token en las cookies.")
+#     if not current_token:
+#         raise HTTPException(status_code=400, detail="No se encontró ningún token en las cookies.")
     
-    # Verificar el token actual
-    try:
-        decoded_token = verify_token(current_token)  # Asumiendo que esta función decodifica y valida el token
-    except Exception as e:
-        raise HTTPException(status_code=401, detail="Token no válido")
+#     # Verificar el token actual
+#     try:
+#         decoded_token = verify_token(current_token)  # Asumiendo que esta función decodifica y valida el token
+#     except Exception as e:
+#         raise HTTPException(status_code=401, detail="Token no válido")
 
-    # Verificar el nuevo token (si es necesario)
-    try:
-        decoded_new_token = verify_token(new_token)  # Opcional, puedes validar el nuevo token si es necesario
-    except Exception as e:
-        raise HTTPException(status_code=400, detail="Nuevo token no válido.")
+#     # Verificar el nuevo token (si es necesario)
+#     try:
+#         decoded_new_token = verify_token(new_token)  # Opcional, puedes validar el nuevo token si es necesario
+#     except Exception as e:
+#         raise HTTPException(status_code=400, detail="Nuevo token no válido.")
     
-    # Establecer el nuevo token en la cookie HttpOnly
-    response.set_cookie(
-        key="access_token",
-        value=new_token,
-        httponly=True,
-        max_age=timedelta(hours=24),  # Ajusta la duración según sea necesario
-        secure=False  # Cambiar a True en producción si usas HTTPS
-    )
+#     # Establecer el nuevo token en la cookie HttpOnly
+#     response.set_cookie(
+#         key="access_token",
+#         value=new_token,
+#         httponly=True,
+#         max_age=timedelta(hours=24),  # Ajusta la duración según sea necesario
+#         secure=False  # Cambiar a True en producción si usas HTTPS
+#     )
 
-    return {"access_token": new_token, "message": "Token reemplazado exitosamente"}
+#     return {"access_token": new_token, "message": "Token reemplazado exitosamente"}
 
 
 
@@ -409,7 +414,7 @@ async def protected_route(request: Request):
     # Verificación de la expiración del token
     token_expiration = datetime.fromtimestamp(exp, timezone.utc).astimezone(chile_tz)
     if now_chile > token_expiration:
-        raise HTTPException(status_code=401, detail="Token has expired")
+        raise HTTPException(status_code=401, detail="El token ha caducado")
 
     # Verificación del horario de acceso
     if access_schedule:
@@ -418,12 +423,12 @@ async def protected_route(request: Request):
             raise HTTPException(status_code=403, detail="Acceso no permitido fuera del horario previsto")
 
     # Obtener el límite de consultas para el rol del usuario
-    print(f"Max queries for role {role}: {max_queries}")  # Depuración
+    print(f"Consultas máximas para el rol {role}: {max_queries}")  # Depuración
     
     # Rastrear las consultas
     track_user_queries(email, max_queries)
 
-    return {"message": f"Access granted to {email}", "role": role}
+    return {"message": f"Acceso concedido a {email}", "role": role}
 
 
 @app.post("/logout")
