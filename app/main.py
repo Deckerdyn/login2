@@ -8,7 +8,7 @@ from app.auth.hash import hash_password, verify_password
 from app.auth.jwt import create_access_token, verify_token  
 import os
 from bson import ObjectId
-from app.database.db import users_collection  
+from app.database.db import users_collection, meditions_collection  
 from datetime import datetime, timedelta, timezone
 import jwt
 from app.auth.jwt import SECRET_KEY, ALGORITHM  
@@ -19,35 +19,140 @@ import secrets
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware  # Importar correctamente
 from starlette.responses import Response
+import requests
+from pydantic import BaseModel
+from apscheduler.schedulers.background import BackgroundScheduler
 
 # Zona horaria de Chile
 chile_tz = pytz.timezone("America/Santiago")
 app = FastAPI()
 
+# Credenciales API
+CLIENT_ID = "119"
+CLIENT_SECRET = "RrjCh6WINj8PV6dgmf6Xi6SjP5iLnGQVPaULMXsa"
+
+# Variables globales para el token de acceso
+access_token = None
+token_expiration = None
+TOKEN_REFRESH_INTERVAL = timedelta(hours=12)
+
+# Modelo Pydantic para la medición (opcional si usas validación)
+class Medicion(BaseModel):
+    id: str
+    empresa_id: str
+    empresa: str
+    nombre_centro: str
+    siep_centro: str
+    fecha_muestreo: datetime
+    fecha_analisis: datetime
+    fecha_modificacion: datetime
+    estado_registro: str
+    tecnica_utilizada: str
+    firma: str
+    tipo_medicion: str
+    observaciones: str
+    id_especie: str
+    grupo_especie: str
+    nombre_especie: str
+    p0: float
+    p5: float
+    p10: float
+    p15: float
+    p20: float
+    p25: float
+    p30: float
+    eliminado: bool = False
+    ultima_actualizacion: datetime
+
+def get_token():
+    global access_token, token_expiration
+    try:
+        response = requests.post("https://apigeneral.gtrgestion.cl/oauth/token", json={
+            "grant_type": "client_credentials",
+            "client_id": CLIENT_ID,
+            "client_secret": CLIENT_SECRET
+        })
+        response.raise_for_status()
+        data = response.json()
+        access_token = data["access_token"]
+        token_expiration = datetime.utcnow() + timedelta(seconds=data["expires_in"])
+        print(f"Token obtenido: {access_token}")
+    except requests.RequestException as e:
+        print(f"Error al obtener el token: {e}")
+
+# Función para obtener datos de la API externa
+def fetch_data_from_api():
+    global access_token, token_expiration
+    if not access_token or datetime.utcnow() >= token_expiration:
+        get_token()
+    
+    try:
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        api_url = f"https://apigeneral.gtrgestion.cl/api/fan_mediciones?fecha_desde={today}&fecha_hasta={today}"
+        headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
+        
+        response = requests.get(api_url, headers=headers)
+        response.raise_for_status()
+        
+        return response.json().get("mediciones", [])
+    except requests.RequestException as e:
+        print(f"Error al obtener datos de la API: {e}")
+        return []
+    
+# Función para guardar datos en MongoDB
+def save_data():
+    mediciones = fetch_data_from_api()
+    if not mediciones:
+        return
+
+    for medicion in mediciones:
+        medicion["ultima_actualizacion"] = datetime.utcnow()
+        medicion["empresa_id"] = "005"
+        medicion["empresa"] = "Salmones Austral"
+        
+        existing = meditions_collection.find_one({
+            "id": medicion["id"],
+            "nombre_centro": medicion["nombre_centro"],
+            "siep_centro": medicion["siep_centro"],
+            "fecha_muestreo": medicion["fecha_muestreo"],
+            "fecha_analisis": medicion["fecha_analisis"],
+            "id_especie": medicion["id_especie"]
+        })
+        
+        if not existing:
+            meditions_collection.insert_one(medicion)
+
+    print("Datos guardados correctamente.")
+
+# Programar actualización automática de datos cada 2 horas
+scheduler = BackgroundScheduler()
+scheduler.add_job(save_data, "interval", hours=2)
+scheduler.start()
 
 # Definir el middleware CSP
 class CSPMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         response: Response = await call_next(request)
         
-        # Deshabilitar CSP solo para Swagger UI
+        # Deshabilitar CSP para Swagger y ReDoc
         if request.url.path.startswith("/docs") or request.url.path.startswith("/redoc"):
             return response
 
         response.headers['Content-Security-Policy'] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline'; "
-            "style-src 'self' 'unsafe-inline'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
             "img-src 'self' data:; "
-            "font-src 'self'; "
-            "connect-src 'self' https://api.open-meteo.com; "
+            "font-src 'self' data:; "  # Permitir fuentes desde data: URI
+            "connect-src 'self' https://api.open-meteo.com http://10.10.8.60:3001; "
             "object-src 'none'; "
             "frame-src 'none'; "
             "base-uri 'self';"
         )
         return response
 
-# Añadir el middleware a la aplicación FastAPI
+
+# # Añadir el middleware a la aplicación FastAPI
 app.add_middleware(CSPMiddleware)
 
 
@@ -465,3 +570,24 @@ def delete_user(user_id: str):
     
     db.users.delete_one({"_id": ObjectId(user_id)})
     return {"id": user_id, "email": user["email"]}
+
+# Endpoint para obtener los datos almacenados
+@app.get("/datos")
+def get_datos():
+    now = datetime.utcnow()
+    
+
+    # Actualizar datos antes de obtenerlos
+    save_data()
+    latest_mediciones = list(meditions_collection.find().sort("ultima_actualizacion", -1))
+    
+    # Convertir ObjectId a string para que sea JSON serializable
+    for doc in latest_mediciones:
+        doc["_id"] = str(doc["_id"])
+    
+    return {
+        "status": "success",
+        "mediciones": latest_mediciones,
+        "ultimo_dato": datetime.utcnow(),
+        "url": "http://10.10.8.60:3001/datos"
+    }

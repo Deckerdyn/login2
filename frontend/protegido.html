@@ -3,60 +3,222 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Protegido</title>
+    <title>Calendario de Mediciones</title>
     <link rel="stylesheet" href="/static/css/style.css" />
+    <!-- FullCalendar CSS -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      /* Estilos del Overlay del Modal */
+      #modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5); /* Fondo semitransparente */
+      }
+      /* Estilos del contenido del Modal */
+      #modal-content {
+        position: relative;
+        width: 50%;
+        margin: 10% auto; /* Centrado vertical y horizontal */
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        max-height: 80vh;
+        overflow-y: auto;
+      }
+      #modal-content ul {
+        list-style: none;
+        padding: 0;
+      }
+      #modal-content ul li {
+        cursor: pointer;
+        padding: 5px;
+        border-bottom: 1px solid #ddd;
+      }
+      #modal-content ul li:hover {
+        background-color: #f0f0f0;
+      }
+      #modal-content .close {
+        float: right;
+        cursor: pointer;
+        font-size: 20px;
+      }
+      .medicion-detalle {
+        display: none;
+        margin-top: 15px;
+        padding: 10px;
+        border-radius: 5px;
+        background-color: #f9f9f9;
+        border: 1px solid #ddd;
+      }
+      /* Opcional: centrar el contenido principal */
+      .protected-container {
+        text-align: center;
+      }
+    </style>
   </head>
   <body>
-    <!-- Contenedor principal centrado -->
     <div class="protected-container">
-      <h1>Información de Clima</h1>
-      <p>Solo puedes acceder a esta página si tienes un token válido.</p>
-
-      <div id="weather-info">
-        <!-- Aquí se mostrará la información de clima -->
-        <p id="temperature"></p>
-        <p id="description"></p>
-        <p id="location"></p>
-      </div>
-
+      <h1>Calendario de Mediciones de Microalgas</h1>
+      <!-- El calendario se renderiza con su header predeterminado -->
+      <div id="calendar"></div>
       <button id="backBtn">Volver al Dashboard</button>
     </div>
 
+    <!-- Modal: El contenedor #modal actúa como overlay y dentro se encuentra #modal-content -->
+    <div id="modal">
+      <div id="modal-content">
+        <span class="close" onclick="closeModal()">&times;</span>
+        <h2>Mediciones del día</h2>
+        <ul id="mediciones-list"></ul>
+        <div id="medicion-detalle" class="medicion-detalle"></div>
+      </div>
+    </div>
+
+    <!-- FullCalendar JS -->
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
     <script>
-      // Obtener la información del clima de la API de Open-Meteo
-      async function getWeatherData() {
+      // Función para parsear una fecha en formato "dd-mm-yyyy hh:mm:ss" a objeto Date
+      function parseCustomDate(dateStr) {
+        const [datePart, timePart] = dateStr.split(" ");
+        if (!datePart || !timePart) {
+          return new Date(dateStr);
+        }
+        const [day, month, year] = datePart.split("-");
+        return new Date(`${year}-${month}-${day}T${timePart}`);
+      }
+
+      async function getMediciones() {
         try {
-          const response = await fetch(
-            "https://api.open-meteo.com/v1/forecast?latitude=40.7128&longitude=-74.0060&current_weather=true"
-          );
+          const response = await fetch("/datos");
           const data = await response.json();
-
-          if (data && data.current_weather) {
-            const weather = data.current_weather;
-            document.getElementById(
-              "temperature"
-            ).textContent = `Temperatura: ${weather.temperature}°C`;
-
-            document.getElementById(
-              "location"
-            ).textContent = `Ubicación: New York (lat: 40.7128, lon: -74.0060)`;
-          } else {
-            document.getElementById("weather-info").textContent =
-              "No se pudo obtener información del clima.";
-          }
+          return data.mediciones || [];
         } catch (error) {
-          console.error("Error al obtener los datos del clima:", error);
-          document.getElementById("weather-info").textContent =
-            "Error al obtener los datos del clima.";
+          console.error("Error al obtener las mediciones:", error);
+          return [];
         }
       }
 
-      // Llamar a la función para obtener los datos del clima
-      getWeatherData();
+      async function initCalendar() {
+        const mediciones = await getMediciones();
+        console.log("Mediciones recibidas:", mediciones);
 
-      // Función para volver al Dashboard
+        // Agrupar mediciones por día (YYYY-MM-DD)
+        const grouped = {};
+        mediciones.forEach((medicion) => {
+          const dateObj = parseCustomDate(medicion.fecha_muestreo);
+          const dateKey = dateObj.toISOString().split("T")[0];
+          if (!grouped[dateKey]) {
+            grouped[dateKey] = [];
+          }
+          grouped[dateKey].push(medicion);
+        });
+
+        const events = [];
+        for (const dateKey in grouped) {
+          const count = grouped[dateKey].length;
+          events.push({
+            title: `${count} Mediciones`,
+            start: dateKey,
+            extendedProps: {
+              details: grouped[dateKey],
+            },
+          });
+        }
+
+        const calendarEl = document.getElementById("calendar");
+        const calendar = new FullCalendar.Calendar(calendarEl, {
+          locale: "es", // Cambia el idioma a español
+          initialView: "dayGridMonth",
+          headerToolbar: {
+            left: "title",
+            center: "",
+            right: "prev,today,next",
+          },
+          buttonText: {
+            today: "Hoy",
+          },
+          events: events,
+          eventClick: function (info) {
+            showMedicionesList(info.event.extendedProps.details);
+          },
+        });
+
+        calendar.render();
+      }
+
+      function showMedicionesList(mediciones) {
+        const listContainer = document.getElementById("mediciones-list");
+        const detalleContainer = document.getElementById("medicion-detalle");
+        listContainer.innerHTML = "";
+        detalleContainer.innerHTML = "";
+        detalleContainer.style.display = "none";
+
+        mediciones.forEach((med, index) => {
+          const li = document.createElement("li");
+          li.textContent = `${index + 1}. ${med.nombre_centro} - ${
+            med.nombre_especie
+          }`;
+          li.onclick = () => showMedicionDetails(med);
+          listContainer.appendChild(li);
+        });
+
+        document.getElementById("modal").style.display = "block";
+      }
+
+      function showMedicionDetails(med) {
+        const detalleContainer = document.getElementById("medicion-detalle");
+        detalleContainer.innerHTML = `
+          <h3>Detalles de la Medición</h3>
+          <p><strong>Centro:</strong> ${med.nombre_centro}</p>
+          <p><strong>Especie:</strong> ${med.nombre_especie}</p>
+          <p><strong>Grupo Especie:</strong> ${med.grupo_especie}</p>
+          <p><strong>Fecha Muestreo:</strong> ${med.fecha_muestreo}</p>
+          <p><strong>Fecha Análisis:</strong> ${med.fecha_analisis}</p>
+          <p><strong>Estado Registro:</strong> ${med.estado_registro}</p>
+          <p><strong>Técnica Utilizada:</strong> ${med.tecnica_utilizada}</p>
+          <p><strong>Tipo Medición:</strong> ${med.tipo_medicion}</p>
+          <p><strong>Observaciones:</strong> ${
+            med.observaciones || "Ninguna"
+          }</p>
+          <p><strong>P0:</strong> ${med.p0 ?? "N/A"}</p>
+          <p><strong>P5:</strong> ${med.p5 ?? "N/A"}</p>
+          <p><strong>P10:</strong> ${med.p10 ?? "N/A"}</p>
+          <p><strong>P15:</strong> ${med.p15 ?? "N/A"}</p>
+          <p><strong>P20:</strong> ${med.p20 ?? "N/A"}</p>
+          <p><strong>P25:</strong> ${med.p25 ?? "N/A"}</p>
+          <p><strong>P30:</strong> ${med.p30 ?? "N/A"}</p>
+          <p><strong>Empresa:</strong> ${med.empresa}</p>
+        `;
+        detalleContainer.style.display = "block";
+      }
+
+      function closeModal() {
+        document.getElementById("modal").style.display = "none";
+      }
+
+      initCalendar();
+
       document.getElementById("backBtn").addEventListener("click", function () {
-        window.location.href = "/dashboard"; // Redirigir al dashboard
+        window.location.href = "/dashboard";
+      });
+
+      // Cerrar el modal si se hace click fuera del contenido
+      window.addEventListener("click", function (event) {
+        const modal = document.getElementById("modal");
+        const modalContent = document.getElementById("modal-content");
+        // Si el click se realizó sobre el overlay (modal) y no dentro del contenido, se cierra
+        if (event.target === modal) {
+          closeModal();
+        }
       });
     </script>
   </body>
