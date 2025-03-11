@@ -11,7 +11,7 @@
       rel="stylesheet"
     />
     <style>
-      /* Estilos del Overlay del Modal */
+      /* Modal Overlay */
       #modal {
         display: none;
         position: fixed;
@@ -20,45 +20,61 @@
         top: 0;
         width: 100%;
         height: 100%;
-        background: rgba(0, 0, 0, 0.5); /* Fondo semitransparente */
+        background: rgba(0, 0, 0, 0.7);
       }
-      /* Estilos del contenido del Modal */
+
+      /* Modal Content */
       #modal-content {
         position: relative;
         width: 50%;
-        margin: 10% auto; /* Centrado vertical y horizontal */
-        background: white;
+        margin: 10% auto;
+        background-color: #292929;
         padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        border-radius: 8px;
+        border: 1px solid #444444;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
         max-height: 80vh;
         overflow-y: auto;
+        color: #e0e0e0;
       }
-      #modal-content ul {
-        list-style: none;
-        padding: 0;
-      }
-      #modal-content ul li {
-        cursor: pointer;
-        padding: 5px;
-        border-bottom: 1px solid #ddd;
-      }
-      #modal-content ul li:hover {
-        background-color: #f0f0f0;
-      }
+
+      /* Botón para cerrar el modal */
       #modal-content .close {
         float: right;
         cursor: pointer;
         font-size: 20px;
+        color: #e0e0e0;
       }
-      .medicion-detalle {
-        display: none;
-        margin-top: 15px;
+
+      /* Lista dentro del modal */
+      #modal-content ul {
+        list-style: none;
+        padding: 0;
+      }
+
+      /* Estilo para cada elemento de la lista */
+      #modal-content ul li {
+        cursor: pointer;
+        padding: 10px;
+        border-bottom: 1px solid #555555;
+        transition: background-color 0.2s ease;
+      }
+
+      /* Hover sobre elementos de la lista */
+      #modal-content ul li:hover {
+        background-color: #3f3f3f;
+      }
+
+      /* Estilo para el detalle inline de la medición */
+      .medicion-detalle-inline {
+        margin-top: 10px;
         padding: 10px;
         border-radius: 5px;
-        background-color: #f9f9f9;
-        border: 1px solid #ddd;
+        background-color: #333333;
+        border: 1px solid #555555;
+        color: #e0e0e0;
       }
+
       /* Opcional: centrar el contenido principal */
       .protected-container {
         text-align: center;
@@ -79,7 +95,6 @@
         <span class="close" onclick="closeModal()">&times;</span>
         <h2>Mediciones del día</h2>
         <ul id="mediciones-list"></ul>
-        <div id="medicion-detalle" class="medicion-detalle"></div>
       </div>
     </div>
 
@@ -136,7 +151,7 @@
 
         const calendarEl = document.getElementById("calendar");
         const calendar = new FullCalendar.Calendar(calendarEl, {
-          locale: "es", // Cambia el idioma a español
+          locale: "es",
           initialView: "dayGridMonth",
           headerToolbar: {
             left: "title",
@@ -150,55 +165,69 @@
           eventClick: function (info) {
             showMedicionesList(info.event.extendedProps.details);
           },
+          eventDidMount: function (info) {
+            info.el.style.cursor = "pointer"; // Cambia el cursor a "pointer"
+          },
         });
 
         calendar.render();
       }
 
+      // Muestra la lista de mediciones en el modal
       function showMedicionesList(mediciones) {
         const listContainer = document.getElementById("mediciones-list");
-        const detalleContainer = document.getElementById("medicion-detalle");
-        listContainer.innerHTML = "";
-        detalleContainer.innerHTML = "";
-        detalleContainer.style.display = "none";
+        listContainer.innerHTML = ""; // Limpiar la lista previa
 
         mediciones.forEach((med, index) => {
           const li = document.createElement("li");
           li.textContent = `${index + 1}. ${med.nombre_centro} - ${
             med.nombre_especie
           }`;
-          li.onclick = () => showMedicionDetails(med);
+          li.onclick = function () {
+            toggleMedicionInline(li, med);
+          };
           listContainer.appendChild(li);
         });
 
         document.getElementById("modal").style.display = "block";
       }
 
-      function showMedicionDetails(med) {
-        const detalleContainer = document.getElementById("medicion-detalle");
-        detalleContainer.innerHTML = `
-          <h3>Detalles de la Medición</h3>
-          <p><strong>Centro:</strong> ${med.nombre_centro}</p>
-          <p><strong>Especie:</strong> ${med.nombre_especie}</p>
-          <p><strong>Grupo Especie:</strong> ${med.grupo_especie}</p>
-          <p><strong>Fecha Muestreo:</strong> ${med.fecha_muestreo}</p>
-          <p><strong>Fecha Análisis:</strong> ${med.fecha_analisis}</p>
-          <p><strong>Estado Registro:</strong> ${med.estado_registro}</p>
-          <p><strong>Técnica Utilizada:</strong> ${med.tecnica_utilizada}</p>
-          <p><strong>Tipo Medición:</strong> ${med.tipo_medicion}</p>
-          <p><strong>Observaciones:</strong> ${
-            med.observaciones || "Ninguna"
-          }</p>
-          <p><strong>P0:</strong> ${med.p0 ?? "N/A"}</p>
-          <p><strong>P5:</strong> ${med.p5 ?? "N/A"}</p>
-          <p><strong>P10:</strong> ${med.p10 ?? "N/A"}</p>
-          <p><strong>P15:</strong> ${med.p15 ?? "N/A"}</p>
-          <p><strong>P20:</strong> ${med.p20 ?? "N/A"}</p>
-          <p><strong>P25:</strong> ${med.p25 ?? "N/A"}</p>
-          <p><strong>P30:</strong> ${med.p30 ?? "N/A"}</p>
-          <p><strong>Empresa:</strong> ${med.empresa}</p>
-        `;
-        detalleContainer.style.display = "block";
+      // Función para desplegar o contraer los detalles de una medición inline
+      function toggleMedicionInline(li, med) {
+        let detailsDiv = li.querySelector(".medicion-detalle-inline");
+        if (detailsDiv) {
+          // Si ya existe, alterna su visibilidad
+          detailsDiv.style.display =
+            detailsDiv.style.display === "block" ? "none" : "block";
+        } else {
+          // Si no existe, créalo y agrégalo al li
+          detailsDiv = document.createElement("div");
+          detailsDiv.className = "medicion-detalle-inline";
+          detailsDiv.innerHTML = `
+            <h3>Detalles de la Medición</h3>
+            <p><strong>Centro:</strong> ${med.nombre_centro}</p>
+            <p><strong>Especie:</strong> ${med.nombre_especie}</p>
+            <p><strong>Grupo Especie:</strong> ${med.grupo_especie}</p>
+            <p><strong>Fecha Muestreo:</strong> ${med.fecha_muestreo}</p>
+            <p><strong>Fecha Análisis:</strong> ${med.fecha_analisis}</p>
+            <p><strong>Estado Registro:</strong> ${med.estado_registro}</p>
+            <p><strong>Técnica Utilizada:</strong> ${med.tecnica_utilizada}</p>
+            <p><strong>Tipo Medición:</strong> ${med.tipo_medicion}</p>
+            <p><strong>Observaciones:</strong> ${
+              med.observaciones || "Ninguna"
+            }</p>
+            <p><strong>P0:</strong> ${med.p0 ?? "N/A"}</p>
+            <p><strong>P5:</strong> ${med.p5 ?? "N/A"}</p>
+            <p><strong>P10:</strong> ${med.p10 ?? "N/A"}</p>
+            <p><strong>P15:</strong> ${med.p15 ?? "N/A"}</p>
+            <p><strong>P20:</strong> ${med.p20 ?? "N/A"}</p>
+            <p><strong>P25:</strong> ${med.p25 ?? "N/A"}</p>
+            <p><strong>P30:</strong> ${med.p30 ?? "N/A"}</p>
+            <p><strong>Empresa:</strong> ${med.empresa}</p>
+          `;
+          detailsDiv.style.display = "block";
+          li.appendChild(detailsDiv);
+        }
       }
 
       function closeModal() {
@@ -215,7 +244,6 @@
       window.addEventListener("click", function (event) {
         const modal = document.getElementById("modal");
         const modalContent = document.getElementById("modal-content");
-        // Si el click se realizó sobre el overlay (modal) y no dentro del contenido, se cierra
         if (event.target === modal) {
           closeModal();
         }
