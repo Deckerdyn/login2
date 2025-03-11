@@ -5,7 +5,8 @@ body {
   align-items: center;
   height: 100vh;
   margin: 0;
-  background-color: #f4f4f9;
+  background-color: #1e1e1e; /* Fondo oscuro pero suave */
+  color: #e0e0e0; /* Texto claro y suave */
   font-family: Arial, sans-serif;
 }
 
@@ -13,41 +14,52 @@ body {
 .login-container {
   text-align: center;
   padding: 20px;
-  border: 1px solid #ccc;
+  border: 1px solid #444444; /* Borde sutil */
   border-radius: 8px;
-  background-color: white;
-  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+  background-color: #292929; /* Fondo ligeramente más claro que el body */
+  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2); /* Sombra sutil */
   width: 100%;
-  max-width: 400px; /* Limitar el ancho máximo */
-  box-sizing: border-box; /* Asegura que el padding no aumente el tamaño total */
+  max-width: 400px;
+  box-sizing: border-box;
 }
 
-/* Asegurar que el padding no afecte el tamaño total */
+/* Estilo para inputs y botones */
 input,
 button {
-  width: 100%; /* Fuerza que tengan el mismo ancho */
-  padding: 12px 15px; /* Ajusta el padding interno */
+  width: 100%;
+  padding: 12px 15px;
   margin: 10px 0;
-  border: 1px solid #ccc;
+  border: 1px solid #555555;
   border-radius: 4px;
-  box-sizing: border-box; /* Asegura que el padding no aumente el tamaño total */
+  box-sizing: border-box;
+}
+
+/* Estilo específico para inputs */
+input {
+  background-color: #333333; /* Fondo para inputs */
+  color: #e0e0e0;
 }
 
 /* Estilo del botón */
 button {
-  background-color: #4caf50;
-  color: white;
+  background-color: #4f8acb; /* Azul intermedio */
+  color: #ffffff;
   border: none;
   cursor: pointer;
 }
 
-/* Estilo cuando el botón es hover (cuando el ratón está encima) */
+/* Efecto hover para el botón */
 button:hover {
-  background-color: #45a049;
+  background-color: #3f79b3; /* Azul intermedio, un poco más oscuro al pasar el mouse */
 }
 
 /* Estilo del mensaje de error */
 #error-message {
-  color: red;
+  color: #ff6b6b;
   font-size: 14px;
+}
+
+/* Opcional: Estilos para el título */
+.login-container h1 {
+  margin-bottom: 20px;
 }
