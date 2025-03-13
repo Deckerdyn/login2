@@ -30,7 +30,7 @@ from typing import Optional
 # Zona horaria de Chile
 chile_tz = pytz.timezone("America/Santiago")
 app = FastAPI()
-
+# 5555
 # Credenciales API
 CLIENT_ID = config("CLIENT_ID")
 CLIENT_SECRET = config("CLIENT_SECRET")
