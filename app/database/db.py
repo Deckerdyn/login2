@@ -11,7 +11,7 @@ SSH_PASSWORD = config("SSH_PASSWORD")
 
 REMOTE_MONGO_HOST = config("REMOTE_MONGO_HOST", default="127.0.0.1")
 REMOTE_MONGO_PORT = int(config("REMOTE_MONGO_PORT", default=27017))
-DB_NAME = config("DB_NAME", default="micro_algas")
+DB_NAME = config("DB_NAME", default="realfish")
 
 # Iniciar el túnel SSH de forma global
 tunnel = SSHTunnelForwarder(
@@ -29,7 +29,7 @@ db = client[DB_NAME]
 
 # Seleccionar las colecciones
 users_collection = db["users"]
-meditions_collection = db["medicions"]
+meditions_collection = db["datas"]
 
 # Verificar la conexión
 try:

@@ -19,13 +19,15 @@
       }
 
       #calendar {
-        max-width: 900px;
+        max-width: 1200px;
+        /* O incluso width: 100%; */
         margin: 40px auto;
         background: #292929;
         padding: 15px;
         border-radius: 10px;
         box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
       }
+
       /* Estilo de eventos */
       .fc-daygrid-event {
         background: linear-gradient(135deg, #00aeffa8, #00aeff59);
@@ -118,6 +120,7 @@
         background-color: #333333;
         border: 1px solid #555555;
         color: #e0e0e0;
+        text-align: justify; /* Alinea el texto de forma justificada */
       }
 
       /* Opcional: centrar el contenido principal */
@@ -128,7 +131,7 @@
   </head>
   <body>
     <div class="protected-container">
-      <h1>Calendario de Mediciones de Microalgas</h1>
+      <h1>Calendario de Mediciones</h1>
       <!-- El calendario se renderiza con su header predeterminado -->
       <div id="calendar"></div>
       <button id="backBtn">Volver al Dashboard</button>
@@ -146,8 +149,15 @@
     <!-- FullCalendar JS -->
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
     <script>
-      // Función para parsear una fecha en formato "dd-mm-yyyy hh:mm:ss" a objeto Date
+      // Función para parsear fechas. Si es formato ISO, se convierte directamente; si no, se procesa.
       function parseCustomDate(dateStr) {
+        if (!dateStr) {
+          console.error("parseCustomDate: dateStr es undefined o vacío");
+          return null;
+        }
+        if (dateStr.includes("T")) {
+          return new Date(dateStr);
+        }
         const [datePart, timePart] = dateStr.split(" ");
         if (!datePart || !timePart) {
           return new Date(dateStr);
@@ -171,10 +181,19 @@
         const mediciones = await getMediciones();
         console.log("Mediciones recibidas:", mediciones);
 
-        // Agrupar mediciones por día (YYYY-MM-DD)
+        // Agrupar mediciones por día usando el campo timestamp
         const grouped = {};
         mediciones.forEach((medicion) => {
-          const dateObj = parseCustomDate(medicion.fecha_muestreo);
+          const dateStr = medicion.timestamp;
+          if (!dateStr) {
+            console.warn("Medición sin timestamp", medicion);
+            return;
+          }
+          const dateObj = parseCustomDate(dateStr);
+          if (!dateObj) {
+            console.warn("Fecha inválida en medición", medicion);
+            return;
+          }
           const dateKey = dateObj.toISOString().split("T")[0];
           if (!grouped[dateKey]) {
             grouped[dateKey] = [];
@@ -211,7 +230,7 @@
             showMedicionesList(info.event.extendedProps.details);
           },
           eventDidMount: function (info) {
-            info.el.style.cursor = "pointer"; // Cambia el cursor a "pointer"
+            info.el.style.cursor = "pointer";
           },
         });
 
@@ -221,12 +240,13 @@
       // Muestra la lista de mediciones en el modal
       function showMedicionesList(mediciones) {
         const listContainer = document.getElementById("mediciones-list");
-        listContainer.innerHTML = ""; // Limpiar la lista previa
+        listContainer.innerHTML = "";
 
+        // Para cada medición, se muestran los campos de la nueva colección
         mediciones.forEach((med, index) => {
           const li = document.createElement("li");
-          li.textContent = `${index + 1}. ${med.nombre_centro} - ${
-            med.nombre_especie
+          li.textContent = `${index + 1}. ${med.siteDisplayName} - ${
+            med.deviceId
           }`;
           li.onclick = function () {
             toggleMedicionInline(li, med);
@@ -237,38 +257,24 @@
         document.getElementById("modal").style.display = "block";
       }
 
-      // Función para desplegar o contraer los detalles de una medición inline
+      // Función para desplegar o contraer los detalles inline de una medición
       function toggleMedicionInline(li, med) {
         let detailsDiv = li.querySelector(".medicion-detalle-inline");
         if (detailsDiv) {
-          // Si ya existe, alterna su visibilidad
           detailsDiv.style.display =
             detailsDiv.style.display === "block" ? "none" : "block";
         } else {
-          // Si no existe, créalo y agrégalo al li
           detailsDiv = document.createElement("div");
           detailsDiv.className = "medicion-detalle-inline";
           detailsDiv.innerHTML = `
             <h3>Detalles de la Medición</h3>
-            <p><strong>Centro:</strong> ${med.nombre_centro}</p>
-            <p><strong>Especie:</strong> ${med.nombre_especie}</p>
-            <p><strong>Grupo Especie:</strong> ${med.grupo_especie}</p>
-            <p><strong>Fecha Muestreo:</strong> ${med.fecha_muestreo}</p>
-            <p><strong>Fecha Análisis:</strong> ${med.fecha_analisis}</p>
-            <p><strong>Estado Registro:</strong> ${med.estado_registro}</p>
-            <p><strong>Técnica Utilizada:</strong> ${med.tecnica_utilizada}</p>
-            <p><strong>Tipo Medición:</strong> ${med.tipo_medicion}</p>
-            <p><strong>Observaciones:</strong> ${
-              med.observaciones || "Ninguna"
-            }</p>
-            <p><strong>P0:</strong> ${med.p0 ?? "N/A"}</p>
-            <p><strong>P5:</strong> ${med.p5 ?? "N/A"}</p>
-            <p><strong>P10:</strong> ${med.p10 ?? "N/A"}</p>
-            <p><strong>P15:</strong> ${med.p15 ?? "N/A"}</p>
-            <p><strong>P20:</strong> ${med.p20 ?? "N/A"}</p>
-            <p><strong>P25:</strong> ${med.p25 ?? "N/A"}</p>
-            <p><strong>P30:</strong> ${med.p30 ?? "N/A"}</p>
-            <p><strong>Empresa:</strong> ${med.empresa}</p>
+            <p><strong>Site:</strong> ${med.siteDisplayName}</p>
+            <p><strong>Device ID:</strong> ${med.deviceId}</p>
+            <p><strong>Location ID:</strong> ${med.locationId}</p>
+            <p><strong>Timestamp:</strong> ${med.timestamp}</p>
+            <p><strong>Depth Water:</strong> ${med.depthWater}</p>
+            <p><strong>Created At:</strong> ${med.createdAt || "N/A"}</p>
+            <p><strong>Updated At:</strong> ${med.updatedAt || "N/A"}</p>
           `;
           detailsDiv.style.display = "block";
           li.appendChild(detailsDiv);
@@ -285,7 +291,6 @@
         window.location.href = "/dashboard";
       });
 
-      // Cerrar el modal si se hace click fuera del contenido
       window.addEventListener("click", function (event) {
         const modal = document.getElementById("modal");
         const modalContent = document.getElementById("modal-content");

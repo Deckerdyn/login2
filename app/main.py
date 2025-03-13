@@ -24,6 +24,8 @@ from pydantic import BaseModel
 from apscheduler.schedulers.background import BackgroundScheduler
 import logging
 from decouple import config
+from typing import Optional
+
 
 # Zona horaria de Chile
 chile_tz = pytz.timezone("America/Santiago")
@@ -40,31 +42,13 @@ TOKEN_REFRESH_INTERVAL = timedelta(hours=12)
 
 # Modelo Pydantic para la medición (opcional si usas validación)
 class Medicion(BaseModel):
-    id: str
-    empresa_id: str
-    empresa: str
-    nombre_centro: str
-    siep_centro: str
-    fecha_muestreo: datetime
-    fecha_analisis: datetime
-    fecha_modificacion: datetime
-    estado_registro: str
-    tecnica_utilizada: str
-    firma: str
-    tipo_medicion: str
-    observaciones: str
-    id_especie: str
-    grupo_especie: str
-    nombre_especie: str
-    p0: float
-    p5: float
-    p10: float
-    p15: float
-    p20: float
-    p25: float
-    p30: float
-    eliminado: bool = False
-    ultima_actualizacion: datetime
+    locationId: str
+    timestamp: datetime
+    createdAt: Optional[datetime] = None
+    depthWater: float
+    deviceId: str
+    siteDisplayName: str
+    updatedAt: Optional[datetime] = None
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -85,7 +69,6 @@ def get_token():
     except requests.RequestException as e:
         logger.error(f"Error al obtener el token: {e}")
 
-# Función para obtener datos de la API externa
 def fetch_data_from_api():
     global access_token, token_expiration
     if not access_token or datetime.utcnow() >= token_expiration:
@@ -99,37 +82,42 @@ def fetch_data_from_api():
         response = requests.get(api_url, headers=headers)
         response.raise_for_status()
         
+        # Se espera que la API retorne mediciones con la estructura nueva
         return response.json().get("mediciones", [])
     except requests.RequestException as e:
-        print(f"Error al obtener datos de la API: {e}")
+        logger.error(f"Error al obtener datos de la API: {e}")
         return []
     
 # Función para guardar datos en MongoDB
+
 def save_data():
     mediciones = fetch_data_from_api()
     if not mediciones:
         return
 
     for medicion in mediciones:
-        medicion["ultima_actualizacion"] = datetime.utcnow()
-        medicion["empresa_id"] = "005"
-        medicion["empresa"] = "Salmones Austral"
-        
+        # Actualiza o asigna campos propios de la nueva colección
+        medicion["updatedAt"] = datetime.utcnow()
+        if not medicion.get("createdAt"):
+            medicion["createdAt"] = datetime.utcnow()
+        if not medicion.get("timestamp"):
+            medicion["timestamp"] = datetime.utcnow()
+
+        # Verifica si la medición ya existe usando deviceId y timestamp como claves
         existing = meditions_collection.find_one({
-            "id": medicion["id"],
-            "nombre_centro": medicion["nombre_centro"],
-            "siep_centro": medicion["siep_centro"],
-            "fecha_muestreo": medicion["fecha_muestreo"],
-            "fecha_analisis": medicion["fecha_analisis"],
-            "id_especie": medicion["id_especie"]
+            "deviceId": medicion.get("deviceId"),
+            "timestamp": medicion.get("timestamp")
         })
         
         if not existing:
             meditions_collection.insert_one(medicion)
 
-    print("Datos guardados correctamente.")
+    logger.info("Datos guardados correctamente.")
 
+# ------------------------------------------------------------------------------
 # Programar actualización automática de datos cada 2 horas
+# ------------------------------------------------------------------------------
+
 scheduler = BackgroundScheduler()
 scheduler.add_job(save_data, "interval", hours=2)
 scheduler.start()
