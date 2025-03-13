@@ -22,14 +22,16 @@ from starlette.responses import Response
 import requests
 from pydantic import BaseModel
 from apscheduler.schedulers.background import BackgroundScheduler
+import logging
+from decouple import config
 
 # Zona horaria de Chile
 chile_tz = pytz.timezone("America/Santiago")
 app = FastAPI()
 
 # Credenciales API
-CLIENT_ID = "119"
-CLIENT_SECRET = "RrjCh6WINj8PV6dgmf6Xi6SjP5iLnGQVPaULMXsa"
+CLIENT_ID = config("CLIENT_ID")
+CLIENT_SECRET = config("CLIENT_SECRET")
 
 # Variables globales para el token de acceso
 access_token = None
@@ -64,6 +66,9 @@ class Medicion(BaseModel):
     eliminado: bool = False
     ultima_actualizacion: datetime
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 def get_token():
     global access_token, token_expiration
     try:
@@ -76,9 +81,9 @@ def get_token():
         data = response.json()
         access_token = data["access_token"]
         token_expiration = datetime.utcnow() + timedelta(seconds=data["expires_in"])
-        print(f"Token obtenido: {access_token}")
+        logger.info("Token obtenido correctamente")
     except requests.RequestException as e:
-        print(f"Error al obtener el token: {e}")
+        logger.error(f"Error al obtener el token: {e}")
 
 # Función para obtener datos de la API externa
 def fetch_data_from_api():
