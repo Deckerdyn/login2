@@ -63,3 +63,30 @@ button:hover {
 .login-container h1 {
   margin-bottom: 20px;
 }
+/* Estilos para posicionar iconos en los textfields */
+.input-group {
+  position: relative;
+  margin-bottom: 15px;
+}
+.input-group input {
+  width: 100%;
+  padding: 12px 15px;
+  padding-left: 40px; /* Espacio para el icono a la izquierda */
+  padding-right: 40px; /* Espacio para el botón de mostrar/ocultar contraseña */
+  box-sizing: border-box;
+}
+.input-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #aaa;
+}
+.toggle-password {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  color: #aaa;
+}

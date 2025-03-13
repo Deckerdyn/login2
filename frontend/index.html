@@ -5,40 +5,70 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Login</title>
     <link rel="stylesheet" href="/static/css/style.css" />
+    <!-- Cargar FontAwesome sin integrity -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
   </head>
   <body>
     <div class="login-container">
       <h1>Iniciar Sesión</h1>
       <form id="loginForm">
-        <input
-          type="text"
-          name="email"
-          id="email"
-          placeholder="Correo"
-          required
-        />
-        <input
-          type="password"
-          name="password"
-          id="password"
-          placeholder="Contraseña"
-          required
-        />
+        <div class="input-group">
+          <span class="input-icon"><i class="fa-solid fa-envelope"></i></span>
+          <input
+            type="text"
+            name="email"
+            id="email"
+            placeholder="Correo"
+            required
+          />
+        </div>
+        <div class="input-group">
+          <span class="input-icon"><i class="fa-solid fa-lock"></i></span>
+          <input
+            type="password"
+            name="password"
+            id="password"
+            placeholder="Contraseña"
+            required
+          />
+          <span class="toggle-password" id="togglePassword">
+            <i class="fa-solid fa-eye"></i>
+          </span>
+        </div>
         <input type="hidden" name="csrf_token" id="csrf_token" />
-        <!-- Token CSRF (Se rellenará con el valor al iniciar sesión) -->
-
+        <!-- Token CSRF (Se rellenará al iniciar sesión) -->
         <button type="submit">Ingresar</button>
       </form>
-
       <p id="error-message" style="color: red"></p>
     </div>
 
     <script>
+      // Alternar entre mostrar y ocultar la contraseña
+      const passwordInput = document.getElementById("password");
+      const togglePassword = document.getElementById("togglePassword");
+
+      togglePassword.addEventListener("click", function () {
+        const type =
+          passwordInput.getAttribute("type") === "password"
+            ? "text"
+            : "password";
+        passwordInput.setAttribute("type", type);
+        this.innerHTML =
+          type === "password"
+            ? '<i class="fa-solid fa-eye"></i>'
+            : '<i class="fa-solid fa-eye-slash"></i>';
+      });
+
+      // Envío del formulario de login
       document
         .getElementById("loginForm")
         .addEventListener("submit", async function (e) {
           e.preventDefault();
-
           const email = document.getElementById("email").value;
           const password = document.getElementById("password").value;
           const csrfToken = document.getElementById("csrf_token").value;
@@ -49,19 +79,16 @@
               method: "POST",
               headers: {
                 "Content-Type": "application/x-www-form-urlencoded",
-                "X-CSRF-Token": csrfToken, // Enviar CSRF token
+                "X-CSRF-Token": csrfToken,
               },
               body: new URLSearchParams({ email, password }),
-              credentials: "include", // Mantener cookies de sesión
+              credentials: "include",
             });
-
             if (response.ok) {
               const data = await response.json();
-              // Guardar el Access Token en las cookies (espero que ya se esté manejando en el backend)
               document.cookie = `access_token=${data.access_token}; path=/; secure; HttpOnly`;
-              // Guardar el CSRF token de la respuesta (si es necesario)
               document.getElementById("csrf_token").value = data.csrf_token;
-              window.location.href = "/dashboard"; // Redirigir al dashboard
+              window.location.href = "/dashboard";
             } else {
               const error = await response.json();
               errorMessage.innerText =
@@ -73,7 +100,7 @@
           }
         });
 
-      // Obtener CSRF token automáticamente al cargar la página (si ya se ha autenticado)
+      // Obtener el token CSRF automáticamente al cargar la página
       document.addEventListener("DOMContentLoaded", async () => {
         function getCookie(name) {
           const cookies = document.cookie.split("; ");
@@ -85,16 +112,12 @@
           }
           return null;
         }
-
-        // Verificar si hay una cookie de sesión antes de solicitar el CSRF token
         if (getCookie("session")) {
-          // Cambia "session" por el nombre real de tu cookie de sesión
           try {
             const response = await fetch("/csrf-token", {
               method: "GET",
               credentials: "include",
             });
-
             if (response.ok) {
               const data = await response.json();
               document.getElementById("csrf_token").value = data.csrf_token;
@@ -102,8 +125,6 @@
           } catch (error) {
             console.error("Error al obtener CSRF Token:", error);
           }
-        } else {
-          //console.log("No hay sesión activa, no se solicitará CSRF token.");
         }
       });
     </script>

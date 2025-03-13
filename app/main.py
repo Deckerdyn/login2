@@ -145,11 +145,11 @@ class CSPMiddleware(BaseHTTPMiddleware):
 
         response.headers['Content-Security-Policy'] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
-            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
-            "img-src 'self' data:; "
-            "font-src 'self' data:; "  # Permitir fuentes desde data: URI
-            "connect-src 'self' https://api.open-meteo.com http://10.10.8.60:3001; "
+            "script-src 'self' 'unsafe-inline' https:; "
+            "style-src 'self' 'unsafe-inline' https:; "
+            "img-src 'self' data: https:; "
+            "font-src 'self' data: https:; "
+            "connect-src 'self' https:; "
             "object-src 'none'; "
             "frame-src 'none'; "
             "base-uri 'self';"
