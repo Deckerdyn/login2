@@ -567,20 +567,17 @@ def delete_user(user_id: str):
 # Endpoint para obtener los datos almacenados
 @app.get("/datos")
 def get_datos():
-    now = datetime.utcnow()
-    
-
-    # Actualizar datos antes de obtenerlos
-    save_data()
-    latest_mediciones = list(meditions_collection.find().sort("ultima_actualizacion", -1))
-    
-    # Convertir ObjectId a string para que sea JSON serializable
-    for doc in latest_mediciones:
-        doc["_id"] = str(doc["_id"])
-    
-    return {
-        "status": "success",
-        "mediciones": latest_mediciones,
-        "ultimo_dato": datetime.utcnow(),
-        "url": "http://10.10.8.60:3001/datos"
-    }
+    try:
+        now = datetime.utcnow()
+        save_data()
+        latest_mediciones = list(meditions_collection.find().sort("ultima_actualizacion", -1).allow_disk_use(True))
+        for doc in latest_mediciones:
+            doc["_id"] = str(doc["_id"])
+        return {
+            "status": "success",
+            "mediciones": latest_mediciones,
+            "ultimo_dato": datetime.utcnow(),
+            "url": "http://10.10.8.60:3001/datos"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
